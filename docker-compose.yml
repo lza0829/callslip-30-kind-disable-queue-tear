@@ -1,0 +1,8 @@
+services:
+  api:
+    build: ./backend
+    ports: ["11400:11400"]
+  web:
+    build: ./frontend
+    ports: ["6400:80"]
+    depends_on: [api]
