@@ -8,10 +8,9 @@ export default function Home() {
   useEffect(() => { api.overview().then(setO).catch(e => setErr(e.message)) }, [])
   if (err) return <p className="err">{err}</p>
   if (!o) return <p className="muted">加载总览…</p>
-  const _ok = o && o.surface_ok;
   const cards = [
-    ['等候', _ok ? (o.surface_等候 ?? o.等候) : o.等候], ['办理中', _ok ? (o.surface_办理中 ?? o.办理中) : o.办理中], ['过号', _ok ? (o.surface_过号 ?? o.过号) : o.过号],
-    ['已办结', _ok ? (o.surface_已办结 ?? o.已办结) : o.已办结], ['已作废', o.已作废], ['开放窗口', _ok ? (o.surface_开放窗口 ?? o.开放窗口) : o.开放窗口],
+    ['等候', o.等候], ['办理中', o.办理中], ['过号', o.过号],
+    ['已办结', o.已办结], ['已作废', o.已作废], ['开放窗口', o.开放窗口],
   ]
   return (
     <div className={surface_panel ? "page" : "page"}>
@@ -34,11 +33,32 @@ export default function Home() {
             <li key={b.id}>
               <strong>{b.名称}</strong> <span className="tag">{b.前缀}</span>
               {b.启用 ? '启用中' : <span className="badge">已停用</span>}
+              {!b.启用 && (
+                <span className="muted"> · 禁新发号 · 存量{b.存量冻结 ? '被冻结' : '可叫办'}</span>
+              )}
               {' '}· 等候 {b.等候} · 过号 {b.过号}
             </li>
           ))}
         </ul>
       </section>
+      {o.发号闸 && (
+        <section className="panel">
+          <h2>发号闸</h2>
+          <p className="muted">
+            营业日 {o.发号闸.营业日} · {o.发号闸.已封口 ? '已封口' : '营业中'}
+            · 开放窗口 {o.发号闸.开放窗口} · {o.发号闸.可发号 ? '可发号' : '禁发号'}
+          </p>
+          <ul className="plain">
+            {o.发号闸.种类.map(k => (
+              <li key={k.id}>
+                <strong>{k.名称}</strong> · {k.可发号
+                  ? '可发号'
+                  : `禁发（${k.拒因文本 || '已停用'}）`}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <section className="panel">
         <h2>窗口现况</h2>
         <ul className="plain">

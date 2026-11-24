@@ -1,5 +1,6 @@
 from __future__ import annotations
 from fastapi import HTTPException
+from app.services import gate
 from app.services.core import (
     business_day,
     kind_row,
@@ -29,9 +30,10 @@ def list_tickets(conn, status: str | None = None, day: str | None = None) -> lis
 
 def waiting_wall(conn) -> dict:
     day = business_day(conn)
-    # 口径「禁新发号留存量」：停用种类的分栏不撤，存量等候/过号继续展示（灰显由前端按 启用 标记）
+    # 口径「禁新发号留存量」：停用种类的分栏不撤，存量等候/过号继续展示（灰显由前端按 启用 标记）。
+    # 分栏的 启用 / 可发号 / 拒因 / 存量冻结 与停用回执、发号闸同源于 gate，杜绝假停用。
     kinds = conn.execute(
-        "SELECT id, name, prefix, active FROM business_kinds ORDER BY id"
+        "SELECT * FROM business_kinds ORDER BY id"
     ).fetchall()
     wall = []
     for k in kinds:
@@ -41,11 +43,17 @@ def waiting_wall(conn) -> dict:
                ORDER BY CASE status WHEN '等候' THEN 0 ELSE 1 END, queue_pos, id""",
             (day, k["id"]),
         ).fetchall()
+        state = gate.gate_state(conn, k, day)
+        backlog = gate.kind_backlog(conn, k["id"], day)
         wall.append(
             {
                 "业务种类": k["name"],
                 "前缀": k["prefix"],
                 "启用": bool(k["active"]),
+                "可发号": state["可发号"],
+                "拒因": state["拒因"],
+                "存量可办": backlog["存量可办"],
+                "存量冻结": backlog["存量冻结"],
                 "等候数": sum(1 for r in rows if r["status"] == "等候"),
                 "过号数": sum(1 for r in rows if r["status"] == "过号"),
                 "队列": [ticket_dict(conn, r) for r in rows],
@@ -67,13 +75,13 @@ def waiting_wall(conn) -> dict:
 def take_ticket(conn, kind_id: int) -> dict:
     # 须在 immediate 事务内调用：校验启停与推进游标、写入号牌同属一个串行化区间，
     # 与启停写口互斥，并发停用不留半截。
-    day = require_open_day(conn)
+    # 发号闸与停用回执、发号探针同源于 gate.gate_state：停用灯亮则此处必拒，
+    # 且拒因文本与探针逐字相同（含封口/无窗口等环境因的合并措辞）。
+    day = business_day(conn)
     kind = kind_row(conn, kind_id)
-    if not kind["active"]:
-        raise HTTPException(400, detail=f"业务种类「{kind['name']}」已停用，禁止新发号")
-    open_wins = conn.execute("SELECT COUNT(*) AS c FROM windows WHERE open=1").fetchone()["c"]
-    if open_wins == 0:
-        raise HTTPException(400, detail="无开放窗口，禁止取号")
+    state = gate.gate_state(conn, kind, day)
+    if not state["可发号"]:
+        raise HTTPException(400, detail=state["拒因文本"] or "禁止新发号")
     seq = kind["seq"] + 1
     slip = f"{kind['prefix']}{seq:03d}"
     pos_row = conn.execute(

@@ -32,6 +32,11 @@ export default function Kinds() {
       {receipt && (
         <p className="receipt">
           启停回执{receipt.事件编号 ? ` · 事件#${receipt.事件编号}` : ''}：{receipt.回执}
+          {receipt.发号闸 && (
+            receipt.发号闸.可发号
+              ? ' · 发号闸：放行'
+              : ` · 发号闸：禁发（${receipt.发号闸.拒因文本 || '已停用'}）`
+          )}
         </p>
       )}
       <section className="panel">
@@ -42,7 +47,10 @@ export default function Kinds() {
               <strong>{k.名称}</strong>
               <span className="tag">{k.前缀}</span>
               {k.启用 ? '启用中' : <span className="badge">已停用</span>}
-              · 游标 {k.序号} · 存量 等候 {k.等候} · 过号 {k.过号} · 在办 {k.在办}
+              {!k.启用 && (
+                <span className="muted"> · 新发号已拒 · 存量{k.存量冻结 ? '被冻结' : '不冻结可叫办'}</span>
+              )}
+              {' '}· 游标 {k.序号} · 存量 等候 {k.等候} · 过号 {k.过号} · 在办 {k.在办}
               <div className="actions">
                 <button type="button" className="ghost" onClick={() => toggle(k)}>
                   {k.启用 ? '停用' : '启用'}
@@ -60,6 +68,7 @@ export default function Kinds() {
             <li key={e.id}>
               #{e.id} {e.时刻} · {e.种类} · {e.动作}
               · 快照 等候 {e.等候} · 过号 {e.过号} · 在办 {e.在办} · 游标 {e.游标}
+              · 结局 {e.启用 ? '启用' : '停用'}
             </li>
           ))}
         </ul>

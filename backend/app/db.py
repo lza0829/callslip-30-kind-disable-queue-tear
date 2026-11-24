@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS kind_events (
   skipped INTEGER NOT NULL DEFAULT 0,
   doing INTEGER NOT NULL DEFAULT 0,
   seq INTEGER NOT NULL DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 1,
   note TEXT NOT NULL DEFAULT '',
   FOREIGN KEY(kind_id) REFERENCES business_kinds(id)
 );
@@ -96,3 +97,8 @@ def db(immediate: bool = False):
 def init_db() -> None:
     with db() as conn:
         conn.executescript(SCHEMA)
+        # 轻量迁移：旧库缺 kind_events.active 时补列，默认按事件动作回填启停终态
+        cols = {r["name"] for r in conn.execute("PRAGMA table_info(kind_events)").fetchall()}
+        if "active" not in cols:
+            conn.execute("ALTER TABLE kind_events ADD COLUMN active INTEGER NOT NULL DEFAULT 1")
+            conn.execute("UPDATE kind_events SET active = CASE action WHEN '启用' THEN 1 ELSE 0 END")
